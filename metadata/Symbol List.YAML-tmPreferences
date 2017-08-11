@@ -1,0 +1,6 @@
+# [PackageDev] target_format: plist, ext: tmPreferences
+name: Symbol List
+scope: >-
+  source.sql entity.name.subquery
+settings:
+  showInSymbolList: '1'

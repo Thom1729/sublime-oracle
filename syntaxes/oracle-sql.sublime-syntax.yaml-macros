@@ -1,0 +1,719 @@
+%YAML 1.2
+%TAG ! tag:yaml-macros:Oracle.syntaxes.macros:
+---
+name: Oracle SQL
+file_extensions:
+  - sql
+scope: source.sql.oracle
+
+variables:
+  ident: '\b[A-Za-z][A-Za-z0-9$_]*\b'
+  unquoted_identifier: '(?!{{reserved}}){{ident}}'
+  general_identifier: '(?:{{unquoted_identifier}}|"[^"]*")'
+  reserved: !word ACCESS|ADD|ALL|ALTER|AND|ANY|AS|ASC|AUDIT|BETWEEN|BY|CHAR|CHECK|CLUSTER|COLUMN|COLUMN_VALUE|COMMENT|COMPRESS|CONNECT|CREATE|CURRENT|DATE|DECIMAL|DEFAULT|DELETE|DESC|DISTINCT|DROP|ELSE|EXCLUSIVE|EXISTS|FILE|FLOAT|FOR|FROM|GRANT|GROUP|HAVING|IDENTIFIED|IMMEDIATE|IN|INCREMENT|INDEX|INITIAL|INSERT|INTEGER|INTERSECT|INTO|IS|LEVEL|LIKE|LOCK|LONG|MAXEXTENTS|MINUS|MLSLABEL|MODE|MODIFY|NESTED_TABLE_ID|NOAUDIT|NOCOMPRESS|NOT|NOWAIT|NULL|NUMBER|OF|OFFLINE|ON|ONLINE|OPTION|OR|ORDER|PCTFREE|PRIOR|PUBLIC|RAW|RENAME|RESOURCE|REVOKE|ROW|ROWID|ROWNUM|ROWS|SELECT|SESSION|SET|SHARE|SIZE|SMALLINT|START|SUCCESSFUL|SYNONYM|SYSDATE|TABLE|THEN|TO|TRIGGER|UID|UNION|UNIQUE|UPDATE|USER|VALIDATE|VALUES|VARCHAR|VARCHAR2|VIEW|WHENEVER|WHERE|WITH
+
+contexts:
+  main:
+    # Try other partial matches
+    - include: comma
+
+    - match: (?i)(?=({{ident}})\s+AS\b)
+      push: [statements, query, query-with-block]
+
+    - match: (?=\()
+      push: [statements, query, query-from-block]
+
+    # Otherwise, guess it's a simple query
+    - match: (?=\S)
+      push: statements
+
+  prototype:
+    - include: comments
+
+  comments:
+    - match: /\*
+      scope: punctuation.definition.comment.begin.sql
+      push:
+        - meta_include_prototype: false
+        - meta_scope: comment.block.sql
+        - match: \*/
+          scope: punctuation.definition.comment.end.sql
+          pop: true
+    - match: (--).*
+      scope: comment.inline.sql
+      captures:
+        1: punctuation.definition.comment.sql
+
+  expect-hint:
+    - meta_include_prototype: false
+
+    - match: /\*\+
+      scope: punctuation.definition.comment.begin.sql
+      set:
+        - meta_include_prototype: false
+        - meta_scope: comment.block.sql
+
+        - match: \*/
+          scope: punctuation.definition.comment.end.sql
+          pop: true
+
+        - include: hint
+          with_prototype:
+            - match: (?=\*/)
+              pop: true
+
+    - match: --\+
+      scope: punctuation.definition.comment.begin.sql
+      set:
+        - meta_include_prototype: false
+        - meta_scope: comment.inline.sql
+
+        - match: $
+          pop: true
+
+        - include: hint
+          with_prototype:
+            - match: $
+              pop: true
+
+    - include: comments
+    - include: else-pop
+
+  hint:
+    - match: (?i)\b([\w]+)\b
+      push:
+        - clear_scopes: 1
+        - meta_scope: support.function.hint.sql
+        - match: ''
+          pop: true
+
+# Utility ######################################################################
+
+  else-pop:
+    - match: (?=\S)
+      pop: true
+
+  expect-open-paren: !expect [ \(, punctuation.section.group.begin.sql ]
+  expect-close-paren: !expect [ \), punctuation.section.group.end.sql ]
+
+  pop-on-terminator:
+    - !pop_on '[);]'
+    - include: pop-on-slash
+
+  pop-on-slash:
+    - !pop_on '^\s*/\s*$'
+
+# Statements ###################################################################
+
+  statements:
+    - match: (?=;)
+      pop: true
+    - match: ^\s*(/)\s*$
+      captures:
+        1: punctuation.terminator.statement.sql
+
+    - match: \)
+      scope: invalid.illegal
+
+    - match: !word_ahead SELECT|WITH
+      push: query
+
+    - match: !word INSERT
+      scope: keyword.other.sql
+      push:
+        - - meta_scope: meta.INSERT.sql
+          - match: !word INTO
+            scope: keyword.other.sql
+            push:
+              - !expect_in_parens expression-list
+              - table-expression
+          - include: query
+        - expect-hint
+
+    - match: !word UPDATE
+      scope: keyword.other.sql
+      push:
+        - - meta_scope: meta.UPDATE.sql
+          - include: query
+        - expect-hint
+
+    - match: !word DELETE
+      scope: keyword.other.sql
+      push:
+        - - meta_scope: meta.DELETE.sql
+          - include: query
+        - expect-hint
+
+    - match: !word MERGE
+      scope: keyword.other.sql
+      push: statement-merge
+
+    - match: (?=\S)
+      push: expression
+
+  statement-merge:
+    - meta_scope: meta.MERGE.sql
+
+    - match: !word INTO
+      scope: keyword.other.sql
+      push:
+        - !empty_context null
+        - expect-alias-or-keyword
+        - !expect_identifier variable.other.table.sql
+
+    - match: !word WHEN
+      scope: keyword.other.sql
+      push:
+        - !empty_context null
+        - statement-merge-update-or-insert
+        - !expect_keyword THEN
+        - !expect_keyword MATCHED
+        - !expect_keyword NOT
+
+    - include: query
+
+  statement-merge-update-or-insert:
+    - match: !word UPDATE
+      scope: keyword.other.sql
+      pop: true
+
+    - match: !word INSERT
+      scope: keyword.other.sql
+      set:
+        - expect-close-paren
+        - expression-list
+        - expect-open-paren
+
+  pop-on-when: [ !pop_on [ !word WHEN ] ]
+
+# Queries ######################################################################
+
+  query:
+    - meta_content_scope: meta.query.sql
+
+    - include: pop-on-terminator
+    - include: pop-on-when
+
+    - match: !word WITH
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.with.sql
+        - query-with-block
+
+    - match: !word SELECT
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.select.sql
+        - !all [ query-block, select-list ]
+        - !expect_keyword DISTINCT
+        - expect-hint
+
+    - match: !word FROM|(NATURAL\s+)?((LEFT|RIGHT|FULL)\s+)?((OUTER|INNER|CROSS)\s+)?JOIN
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.from.sql
+        - query-from-block
+
+    - match: !word CONNECT\s+BY(\s+NOCYCLE)?|START\s+WITH
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.connect_by.sql
+        - expression
+
+    - match: !word ON
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.from.sql
+        - expression
+
+    - match: !word WHERE
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.where.sql
+        - expression
+
+    - match: !word GROUP
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.group_by.sql
+        - !all [ query-block, expression-list ]
+        - !expect_keyword BY
+
+    - match: !word HAVING
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.having.sql
+        - expression
+
+    - match: !word UNION|INTERSECT|MINUS
+      scope: keyword.other.sql
+      push: !expect_keyword ALL
+
+    - match: !word ORDER
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.order-by.sql
+        - !all [ query-block, order-by-list ]
+        - !expect_keyword BY
+        - !expect_keyword SIBLINGS
+
+    - match: !word PIVOT
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.pivot.sql
+        - expect-close-paren
+        - query-pivot-clause-body
+        - expect-open-paren
+        - !expect_keyword XML
+
+    - match: !word BULK
+      push:
+        - meta_scope: keyword.other.sql
+        - match: !word COLLECT
+        - match: !word INTO
+          set: !expect_identifier variable.other.table.sql
+        - include: else-pop
+
+    - match: !word INTO
+      scope: keyword.other.sql
+      push: !expect_identifier variable.other.table.sql
+
+    - match: !word VALUES
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.values.sql
+        - !expect_in_parens expression-list
+
+    - match: !word SET
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.set.sql
+        - expression-list
+
+    - match: !word USING
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.using.sql
+        - query-from-block
+
+    - match: !word_ahead INSERT|UPDATE|DELETE
+      pop: true
+
+  query-breaker:
+    - match: >-
+        (?ix)(?=\s*\b(?:
+          with|select|from|where|connect|start\s+with|group|pivot|unpivot|order|having
+          |(natural)?\s*(left|right|full)?\s*(inner|outer|cross)?\s*join|on
+          |union|intersect|minus
+          |(bulk\s+collect\s+)?into|using|when|set|values
+          |insert|update|delete
+        )\b)
+      pop: true
+
+  query-block:
+    - include: query-breaker
+    - include: pop-on-terminator
+    - include: pop-on-when
+
+  query-with-block:
+    - include: query-block
+    - include: comma
+
+    - match: (?=\()
+      push: !expect_in_parens query
+
+    - match: (?={{general_identifier}})
+      push:
+        - !meta meta.subquery.sql
+        - !expect_in_parens query
+        - !expect_keyword as
+        - !expect_identifier entity.name.subquery.sql
+
+  select-list:
+    - include: pop-on-terminator
+    - include: comma
+
+    - match: (?=\S)
+      push:
+        - !meta meta.select-expression
+        - !expect_identifier entity.name.alias.sql
+        - !expect_keyword as
+        - expression
+
+  query-from-block:
+    - include: query-block
+    - include: comma
+
+    - match: (?=\S)
+      push:
+        - expect-alias-or-keyword
+        - table-expression
+
+  table-expression:
+    - match: \(
+      scope: punctuation.section.group.begin.sql
+      set:
+        - expect-close-paren
+        - query
+
+    - match: \b({{unquoted_identifier}})\s*(\.)
+      captures:
+        1: variable.other.schema.sql
+        2: punctuation.accessor.sql
+
+    - match: !word DUAL
+      scope: variable.language.table
+      pop: true
+
+    - match: !word TABLE
+      scope: keyword.other.sql
+      set: !expect_in_parens expression
+
+    - match: '{{unquoted_identifier}}'
+      scope: variable.other.table
+      set:
+        - match: '@'
+          scope: punctuation.accessor.dblink.sql
+          set: !expect_identifier variable.other.dblink.sql
+        - include: else-pop
+
+  expect-alias-or-keyword:
+    - include: query-breaker
+    - include: expect-alias
+
+  expect-alias: !expect_identifier entity.name.alias
+
+  query-pivot-clause-body:
+    - match: !word FOR
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.pivot.for.sql
+        - !expect_in_parens expression-list
+
+    - match: !word IN
+      scope: keyword.other.sql
+      push:
+        - !meta_set meta.query.pivot.in.sql
+        - !expect_in_parens select-list
+
+    - include: select-list
+
+# Expressions ##################################################################
+
+  expression-list:
+    - include: pop-on-terminator
+
+    - include: comma
+
+    - match: (?=\S)
+      push: expression
+
+  expression:
+    !stack [ expression-end, expression-begin ]
+
+  expression-begin:
+    - include: pop-on-terminator
+    - !pop_on '\s*,'
+
+    - include: operators-prefix
+    - include: literals
+    - include: case-expression
+    - include: builtins
+    
+    - !pop_on '{{reserved}}'
+
+    - match: (?={{unquoted_identifier}}\s*\()
+      set:
+        - - include: function-arguments
+          - include: else-pop
+        - !meta meta.function-call.sql
+        - - include: variable
+
+    - include: variable
+
+    - match: \*
+      scope: keyword.operator.star.sql
+      pop: true
+
+    - match: (?=\()
+      set:
+        - !meta meta.PARENS.sql
+        - !expect_in_parens expression-list-or-subquery
+
+    - include: else-pop
+
+  expression-end:
+    - include: pop-on-terminator
+    - !pop_on '\s*\b(?i:WHEN|THEN|ELSE|END)\b'
+
+    - include: operators-infix
+    - include: operators-postfix
+
+    - match: (?=\()
+      push: function-arguments
+
+    - match: '(%){{ident}}\b'
+      scope: support.function.attribute.sql
+      captures:
+        1: punctuation.accessor.attribute.sql
+      pop: true
+
+    - match: !word OVER
+      scope: keyword.other.sql
+      push:
+        - !meta meta.ANALYTIC.sql
+        - expect-close-paren
+        - analytic-clause-contents
+        - expect-open-paren
+
+    - include: else-pop
+
+  function-arguments: !stack
+    - !meta meta.function-call.arguments.sql
+    - !expect_in_parens expression-list
+
+  expression-list-or-subquery:
+    - match: !word_ahead SELECT|WITH
+      set: query
+    - match: (?=\S)
+      set: expression-list
+
+  operators-prefix:
+    - match: '-|\+'
+      scope: keyword.operator.arithmetic.sql
+      push: expression-begin
+
+    - match: !word NOT
+      scope: keyword.operator.logical.sql
+      push: expression-begin
+
+    - match: !word EXISTS|ANY|SOME|ALL|PRIOR|DISTINCT
+      scope: keyword.operator.word.sql
+      push: expression-begin
+
+    - match: !word NEW
+      scope: keyword.operator.word.sql
+      push: expression-begin
+
+  operators-infix:
+    - match: \.(?!\.)
+      scope: punctuation.accessor.sql
+      push: expression-begin
+
+    - match: '=>'
+      scope: punctuation.separator.key-value.sql
+      push: expression-begin
+
+    - match: '-|\+|\*\*|\*|/'
+      scope: keyword.operator.arithmetic.sql
+      push: expression-begin
+
+    - match: '\|\|'
+      scope: keyword.operator.concatenation.sql
+      push: expression-begin
+
+    - match: '<=|>=|\^=|~=|<>|!=|<|>|='
+      scope: keyword.operator.relational.sql
+      push: expression-begin
+
+    - match: !word IN
+      scope: keyword.operator.word.sql
+      push: expression-begin
+
+    - match: !word NOT
+      scope: keyword.operator.word.sql
+      push:
+        - !empty_context
+        - expression-begin
+        - !expect_keyword IN
+
+    - match: !word AND|OR
+      scope: keyword.operator.logical.sql
+      push: expression-begin
+
+    - match: !word BETWEEN
+      scope: keyword.operator.relational.sql
+      push: expression-begin
+
+    - match: !word LIKE[24C]?
+      scope: keyword.operator.string.sql
+      set:
+        - include: like-pattern
+        - include: expression
+
+  operators-postfix:
+    - match: !word IS
+      scope: keyword.operator.word.sql
+      push:
+        - !expect_keyword NULL|NAN|INFINITE
+        - !expect_keyword NOT
+
+    - match: \(\+\)
+      scope: keyword.operator.join.sql
+
+  variable:
+    - match: (?={{general_identifier}}\s*(?=\()(?!\(\+\)))
+      set:
+        - include: builtin-functions
+        - include: function-name
+
+    - match: (?={{general_identifier}})
+      set: !expect_identifier variable.other.sql
+
+    - match: (:){{ident}}
+      scope: variable.other.sql
+      captures:
+        1: punctuation.definition.parameter.sql
+      pop: true
+
+  function-name: !expect_identifier variable.function.sql
+
+  analytic-clause-contents:
+    - include: pop-on-terminator
+
+    - match: !word PARTITION\s+BY
+      scope: keyword.other.sql
+      set:
+        - include: analytic-clause-contents
+        - include: expression-list
+
+    - match: !word ORDER\s+BY
+      scope: keyword.order.sql
+      set:
+        - include: analytic-clause-contents
+        - include: order-by-list
+
+    - match: !word ROWS|RANGE
+      scope: keyword.other.sql
+      set:
+        - match: !word UNBOUNDED|PRECEDING|FOLLOWING|CURRENT\s+ROW
+          scope: keyword.other.sql
+
+        - include: analytic-clause-contents
+        - include: expression-list
+
+  literals:
+    - match: '(?i)(\b\d+(\.\d*)?|\.\d+\b)(e[-+]?\d+)?'
+      scope: constant.numeric.sql
+      pop: true
+
+    - match: !word NULL
+      scope: constant.language.null.sql
+      pop: true
+    
+    - include: string
+
+  string:
+    - match: \'
+      scope: punctuation.definition.string.begin.sql
+      set:
+        - meta_include_prototype: false
+        - meta_scope: string.quoted.single.sql
+        - match: \'\'
+          scope: constant.character.escape.sql
+        - match: \'
+          scope: punctuation.definition.string.end.sql
+          pop: true
+
+    - !heredoc [ '!', '!' ]
+    - !heredoc [ '\[', '\]' ]
+    - !heredoc [ '\{', '\}' ]
+    - !heredoc [ '\(', '\)' ]
+    - !heredoc [ '\<', '\>' ]
+
+  like-pattern:
+    - match: \'
+      scope: punctuation.definition.string.begin.sql
+      set:
+        - meta_include_prototype: false
+        - meta_scope: string.quoted.single.sql
+        - match: \'\'
+          scope: constant.character.escape.sql
+        - match: _|%
+          scope: constant.other.placeholder.sql
+        - match: \'
+          scope: punctuation.definition.string.end.sql
+          set: !expect [ !word ESCAPE, keyword.other.sql, expression ]
+
+  comma:
+    - match: ','
+      scope: punctuation.separator.comma.sql
+
+  order-by-list:
+    - include: pop-on-terminator
+
+    - include: comma
+
+    - match: (?=\S)
+      push: [ order-expression, expression ]
+
+  order-expression:
+    - match: !word ASC|DESC|NULLS|FIRST|LAST
+      scope: keyword.other.sql
+    - include: else-pop
+
+  builtins:
+    - match: !word ROWNUM|LEVEL
+      scope: variable.language.sql
+      pop: true
+    - match: !word USER|UID|SYSDATE
+      scope: support.function.sql
+      pop: true
+
+  builtin-functions:
+    - match: !word sqlcode|sqlerrm
+      scope: support.function.error.sql
+      pop: true
+    - match: !word abs|acos|asin|atan|atan2|bitand|ceil|cos|cosh|exp|floor|ln|log|mod|power|round|sign|sin|sinh|sqrt|tan|tanh|trunc
+      scope: support.function.number.sql
+      pop: true
+    - match: !word ascii|chr|concat|initcap|instr|instrb|length|lengthb|lower|lpad|ltrim|nls_initcap|nls_lower|nlssort|nls_upper|replace|rpad|rtrim|soundex|substr|substrb|translate|trim|upper
+      scope: support.function.character.sql
+      pop: true
+    - match: !word chartorowid|convert|hextoraw|rawtohex|rowidtochar|to_(?:blob|char|clob|date|multi_byte|nclob|number|single_byte)
+      scope: support.function.conversion.sql
+      pop: true
+    - match: !word add_months|current_date|current_timestamp|dbtimezone|extract|from_tz|last|day|localtimestamp|months_between|new_time|next_dat|numtodsinterval|numtoyminterval|round|sessiontimezone|sysdate|systimestamp|to_dsinterval|to_timestamp(_l?tz)?|to_yminterval|tz_offset|trunc
+      scope: support.function.date.sql
+      pop: true
+    - match: !word deref|ref|value|treat
+      scope: support.function.objref.sql
+      pop: true
+    - match: !word bfilename|decode|dump|empty_blob|empty_clob|greatest|least|nls_charset_(?:decl_len|id|name)|nvl|sys_context|sys_guid|uid|user|userenv|vsize
+      scope: support.function.misc.sql
+      pop: true
+
+  case-expression:
+    - match: !word CASE
+      scope: keyword.control.case.sql
+      set:
+        - !meta meta.case.sql
+        - case-body
+        - - include: pop-on-when
+          - include: expression
+
+  case-body:
+    - match: !word WHEN
+      scope: keyword.control.case.when.sql
+      push:
+        - !meta_set meta.case.when.sql
+        - expression
+
+    - match: !word THEN
+      scope: keyword.control.case.then.sql
+      push:
+        - !meta_set meta.case.then.sql
+        - expression
+
+    - match: !word ELSE
+      scope: keyword.control.case.else.sql
+      push:
+        - !meta_set meta.case.else.sql
+        - expression
+
+    - match: !word END
+      scope: keyword.control.end.sql
+      pop: true
+
+    - match: \S+
+      scope: invalid.illegal

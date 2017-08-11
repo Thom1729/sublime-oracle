@@ -1,0 +1,26 @@
+# [PackageDev] target_format: plist, ext: tmPreferences
+name: Indent
+scope: source.sql
+settings:
+  increaseIndentPattern: >-
+    (?ix)^(
+      (\s|,)* \b(
+        select|from|(group|connect|order|pivot|having)\s+by|
+        case (?! .*\b(end)\b)
+      )\b .*
+      |
+      .*\(\s*
+    )$
+  decreaseIndentPattern: >-
+    (?ix)^(
+      \s* \b(
+        select|from|(group|connect|order|pivot|having)\s+by|
+        end
+      )\b .*
+      |
+      \s* \) .*
+    )$
+  bracketIndentNextLinePattern: >-
+    (?ix)^\s* \b(
+      when|then|else
+    )\b \s*$
