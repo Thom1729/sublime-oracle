@@ -93,26 +93,26 @@ contexts:
     pop: true
 
   expect-open-paren:
-  - pop: true
+  - scope: punctuation.section.group.begin.sql
     match: \(
-    scope: punctuation.section.group.begin.sql
-  - pop: true
-    match: (?=\S)
+    pop: true
+  - match: (?=\S)
+    pop: true
   expect-close-paren:
-  - pop: true
+  - scope: punctuation.section.group.end.sql
     match: \)
-    scope: punctuation.section.group.end.sql
-  - pop: true
-    match: (?=\S)
+    pop: true
+  - match: (?=\S)
+    pop: true
 
   pop-on-terminator:
-  - pop: true
-    match: (?=(?:[);]))
+  - match: (?=(?:\s*[);]))
+    pop: true
   - include: pop-on-slash
 
   pop-on-slash:
-  - pop: true
-    match: (?=(?:^\s*/\s*$))
+  - match: (?=(?:^\s*/\s*$))
+    pop: true
 
 # Statements ###################################################################
 
@@ -132,21 +132,21 @@ contexts:
   - match: (?i)\b(?:INSERT)\b
     scope: keyword.other.sql
     push:
-    - - meta_scope: meta.INSERT.sql
+    - - meta_scope: meta.insert.sql
       - match: (?i)\b(?:INTO)\b
         scope: keyword.other.sql
         push:
-        - - set:
-            - - pop: true
+        - - scope: punctuation.section.group.begin.sql
+            set:
+            - - scope: punctuation.section.group.end.sql
                 match: \)
-                scope: punctuation.section.group.end.sql
-              - pop: true
-                match: (?=\S)
+                pop: true
+              - match: (?=\S)
+                pop: true
             - expression-list
             match: \(
-            scope: punctuation.section.group.begin.sql
-          - pop: true
-            match: (?=\S)
+          - match: (?=\S)
+            pop: true
         - table-expression
       - include: query
     - expect-hint
@@ -154,14 +154,14 @@ contexts:
   - match: (?i)\b(?:UPDATE)\b
     scope: keyword.other.sql
     push:
-    - - meta_scope: meta.UPDATE.sql
+    - - meta_scope: meta.update.sql
       - include: query
     - expect-hint
 
   - match: (?i)\b(?:DELETE)\b
     scope: keyword.other.sql
     push:
-    - - meta_scope: meta.DELETE.sql
+    - - meta_scope: meta.delete.sql
       - include: query
     - expect-hint
 
@@ -170,54 +170,54 @@ contexts:
     push: statement-merge
 
   - match: (?=\S)
-    push: expression
+    push: query
 
   statement-merge:
-  - meta_scope: meta.MERGE.sql
+  - meta_scope: meta.merge.sql
 
   - match: (?i)\b(?:INTO)\b
     scope: keyword.other.sql
     push:
-    - - pop: true
-        match: ''
+    - - match: ''
+        pop: true
     - expect-alias-or-keyword
     -                        
 
-      - pop: true
+      - scope: variable.other.table.sql
         match: '{{unquoted_identifier}}'
-        scope: variable.other.table.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': variable.other.table.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:WHEN)\b
     scope: keyword.other.sql
     push:
-    - - pop: true
-        match: ''
+    - - match: ''
+        pop: true
     - statement-merge-update-or-insert
-    - - pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:THEN)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
-    - - pop: true
+        pop: true
+      - match: (?=\S)
+        pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:MATCHED)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:NOT)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - include: query
 
   statement-merge-update-or-insert:
@@ -232,7 +232,7 @@ contexts:
     - expression-list
     - expect-open-paren
 
-  pop-on-when: [{pop: true, match: '(?=(?:(?i)\b(?:WHEN)\b))'}]
+  pop-on-when: [{match: '(?=(?:(?i)\b(?:WHEN)\b))', pop: true}]
 
 # Queries ######################################################################
 
@@ -247,8 +247,8 @@ contexts:
     push:
     - - meta_scope: meta.query.with.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - query-with-block
 
   - match: (?i)\b(?:SELECT)\b
@@ -256,15 +256,15 @@ contexts:
     push:
     - - meta_scope: meta.query.select.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - - include: query-block
       - include: select-list
-    - - pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:DISTINCT)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     - expect-hint
 
   - match: (?i)\b(?:FROM|(NATURAL\s+)?((LEFT|RIGHT|FULL)\s+)?((OUTER|INNER|CROSS)\s+)?JOIN)\b
@@ -272,8 +272,8 @@ contexts:
     push:
     - - meta_scope: meta.query.from.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - query-from-block
 
   - match: (?i)\b(?:CONNECT\s+BY(\s+NOCYCLE)?|START\s+WITH)\b
@@ -281,8 +281,8 @@ contexts:
     push:
     - - meta_scope: meta.query.connect_by.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:ON)\b
@@ -290,8 +290,8 @@ contexts:
     push:
     - - meta_scope: meta.query.from.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:WHERE)\b
@@ -299,8 +299,8 @@ contexts:
     push:
     - - meta_scope: meta.query.where.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:GROUP)\b
@@ -308,136 +308,136 @@ contexts:
     push:
     - - meta_scope: meta.query.group_by.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - - include: query-block
       - include: expression-list
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:BY)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:HAVING)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.having.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:UNION|INTERSECT|MINUS)\b
     scope: keyword.other.sql
     push:                   
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:ALL)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:ORDER)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.order-by.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - - include: query-block
       - include: order-by-list
-    - - pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:BY)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:SIBLINGS)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:PIVOT)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.pivot.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expect-close-paren
     - query-pivot-clause-body
     - expect-open-paren
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:XML)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:BULK)\b
     push:
     - meta_scope: keyword.other.sql
     - match: (?i)\b(?:COLLECT)\b
     - match: (?i)\b(?:INTO)\b
       set:
-      - pop: true
+      - scope: variable.other.table.sql
         match: '{{unquoted_identifier}}'
-        scope: variable.other.table.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': variable.other.table.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     - include: else-pop
 
   - match: (?i)\b(?:INTO)\b
     scope: keyword.other.sql
     push:                      
 
-      - pop: true
+      - scope: variable.other.table.sql
         match: '{{unquoted_identifier}}'
-        scope: variable.other.table.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': variable.other.table.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:VALUES)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.values.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     -                       
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - expression-list
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:SET)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.set.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression-list
 
   - match: (?i)\b(?:USING)\b
@@ -445,8 +445,8 @@ contexts:
     push:
     - - meta_scope: meta.query.using.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - query-from-block
 
   - match: (?i)\b(?=(?:INSERT|UPDATE|DELETE)\b)
@@ -471,52 +471,52 @@ contexts:
   - match: (?=\()
     push:                     
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - query
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
   - match: (?={{general_identifier}})
     push:
     - - meta_scope: meta.subquery.sql
-      - pop: true
-        match: ''
-    - - set:
-        - - pop: true
+      - match: ''
+        pop: true
+    - - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - query
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
-    - - pop: true
+      - match: (?=\S)
+        pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:as)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     -                        
 
-      - pop: true
+      - scope: entity.name.subquery.sql
         match: '{{unquoted_identifier}}'
-        scope: entity.name.subquery.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': entity.name.subquery.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   select-list:
   - include: pop-on-terminator
   - include: comma
@@ -524,25 +524,25 @@ contexts:
   - match: (?=\S)
     push:
     - - meta_scope: meta.select-expression
-      - pop: true
-        match: ''
-    - - pop: true
+      - match: ''
+        pop: true
+    - - scope: entity.name.alias.sql
         match: '{{unquoted_identifier}}'
-        scope: entity.name.alias.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': entity.name.alias.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
-    - - pop: true
+        pop: true
+      - match: (?=\S)
+        pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:as)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     - expression
 
   query-from-block:
@@ -574,36 +574,51 @@ contexts:
     scope: keyword.other.sql
     set:                     
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - expression
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
-  - match: '{{unquoted_identifier}}'
-    scope: variable.other.table
+      - match: (?=\S)
+        pop: true
+  - match: (?={{general_identifier}})
     set:
-    - match: '@'
-      scope: punctuation.accessor.dblink.sql
-      set:
-      - pop: true
+    - - scope: punctuation.accessor.dblink.sql
+        set:
+        - scope: variable.other.dblink.sql
+          match: '{{unquoted_identifier}}'
+          pop: true
+        - scope: string.quoted.double.sql
+          captures:
+            '2': variable.other.dblink.sql
+            '3': punctuation.definition.string.end.sql
+            '1': punctuation.definition.string.begin.sql
+          match: (")([^"]+)(")
+          pop: true
+        - match: (?=\S)
+          pop: true
+        match: '@'
+      - match: (?=\S)
+        pop: true
+    -                        
+
+      - scope: variable.other.table
         match: '{{unquoted_identifier}}'
-        scope: variable.other.dblink.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
-          '2': variable.other.dblink.sql
+          '2': variable.other.table
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
-    - include: else-pop
+        pop: true
+      - match: (?=\S)
+        pop: true
+  - include: else-pop
 
   expect-alias-or-keyword:
   - include: query-breaker
@@ -611,59 +626,59 @@ contexts:
 
   expect-alias:                    
 
-    - pop: true
+    - scope: entity.name.alias
       match: '{{unquoted_identifier}}'
-      scope: entity.name.alias
-    - pop: true
+      pop: true
+    - scope: string.quoted.double.sql
       captures:
         '2': entity.name.alias
         '3': punctuation.definition.string.end.sql
         '1': punctuation.definition.string.begin.sql
       match: (")([^"]+)(")
-      scope: string.quoted.double.sql
-    - pop: true
-      match: (?=\S)
+      pop: true
+    - match: (?=\S)
+      pop: true
   query-pivot-clause-body:
   - match: (?i)\b(?:FOR)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.pivot.for.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     -                       
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - expression-list
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:IN)\b
     scope: keyword.other.sql
     push:
     - - meta_scope: meta.query.pivot.in.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     -                       
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - select-list
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
   - include: select-list
 
 # Expressions ##################################################################
@@ -684,24 +699,24 @@ contexts:
 
   expression-begin:
   - include: pop-on-terminator
-  - pop: true
-    match: (?=(?:\s*,))
+  - match: (?=(?:\s*,))
+    pop: true
 
   - include: operators-prefix
   - include: literals
   - include: case-expression
   - include: builtins
 
-  - pop: true
-    match: (?=(?:{{reserved}}))
+  - match: (?=(?:{{reserved}}))
+    pop: true
 
   - match: (?={{unquoted_identifier}}\s*\()
     set:
     - - include: function-arguments
       - include: else-pop
     - - meta_scope: meta.function-call.sql
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - - include: variable
 
   - include: variable
@@ -712,28 +727,28 @@ contexts:
 
   - match: (?=\()
     set:
-    - - meta_scope: meta.PARENS.sql
-      - pop: true
-        match: ''
+    - - meta_scope: meta.group.sql
+      - match: ''
+        pop: true
     -                       
 
-      - set:
-        - - pop: true
+      - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - expression-list-or-subquery
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
   - include: else-pop
 
   expression-end:
   - include: pop-on-terminator
-  - pop: true
-    match: (?=(?:\s*\b(?i:WHEN|THEN|ELSE|END)\b))
+  - match: (?=(?:\s*\b(?i:WHEN|THEN|ELSE|END)\b))
+    pop: true
 
   - include: operators-infix
   - include: operators-postfix
@@ -750,9 +765,6 @@ contexts:
   - match: (?i)\b(?:OVER)\b
     scope: keyword.other.sql
     push:
-    - - meta_scope: meta.ANALYTIC.sql
-      - pop: true
-        match: ''
     - expect-close-paren
     - analytic-clause-contents
     - expect-open-paren
@@ -762,19 +774,19 @@ contexts:
   function-arguments:
   - set:
     - - meta_scope: meta.function-call.arguments.sql
-      - pop: true
-        match: ''
-    - - set:
-        - - pop: true
+      - match: ''
+        pop: true
+    - - scope: punctuation.section.group.begin.sql
+        set:
+        - - scope: punctuation.section.group.end.sql
             match: \)
-            scope: punctuation.section.group.end.sql
-          - pop: true
-            match: (?=\S)
+            pop: true
+          - match: (?=\S)
+            pop: true
         - expression-list
         match: \(
-        scope: punctuation.section.group.begin.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
     match: (?=\S)
   expression-list-or-subquery:
   - match: (?i)\b(?=(?:SELECT|WITH)\b)
@@ -827,16 +839,16 @@ contexts:
   - match: (?i)\b(?:NOT)\b
     scope: keyword.operator.word.sql
     push:
-    - - pop: true
-        match: ''
+    - - match: ''
+        pop: true
     - expression-begin
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:IN)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (?i)\b(?:AND|OR)\b
     scope: keyword.operator.logical.sql
     push: expression-begin
@@ -855,18 +867,18 @@ contexts:
   - match: (?i)\b(?:IS)\b
     scope: keyword.operator.word.sql
     push:
-    - - pop: true
+    - - scope: keyword.other.sql
         match: (?i)\b(?:NULL|NAN|INFINITE)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
     -                     
 
-      - pop: true
+      - scope: keyword.other.sql
         match: (?i)\b(?:NOT)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: \(\+\)
     scope: keyword.operator.join.sql
 
@@ -879,18 +891,18 @@ contexts:
   - match: (?={{general_identifier}})
     set:                      
 
-      - pop: true
+      - scope: variable.other.sql
         match: '{{unquoted_identifier}}'
-        scope: variable.other.sql
-      - pop: true
+        pop: true
+      - scope: string.quoted.double.sql
         captures:
           '2': variable.other.sql
           '3': punctuation.definition.string.end.sql
           '1': punctuation.definition.string.begin.sql
         match: (")([^"]+)(")
-        scope: string.quoted.double.sql
-      - pop: true
-        match: (?=\S)
+        pop: true
+      - match: (?=\S)
+        pop: true
   - match: (:){{ident}}
     scope: variable.other.sql
     captures:
@@ -899,18 +911,18 @@ contexts:
 
   function-name:                    
 
-    - pop: true
+    - scope: variable.function.sql
       match: '{{unquoted_identifier}}'
-      scope: variable.function.sql
-    - pop: true
+      pop: true
+    - scope: string.quoted.double.sql
       captures:
         '2': variable.function.sql
         '3': punctuation.definition.string.end.sql
         '1': punctuation.definition.string.begin.sql
       match: (")([^"]+)(")
-      scope: string.quoted.double.sql
-    - pop: true
-      match: (?=\S)
+      pop: true
+    - match: (?=\S)
+      pop: true
   analytic-clause-contents:
   - include: pop-on-terminator
 
@@ -958,46 +970,46 @@ contexts:
       scope: punctuation.definition.string.end.sql
       pop: true
 
-  - set:
+  - scope: punctuation.definition.string.begin.sql
+    set:
     - meta_include_prototype: false
     - meta_scope: string.quoted.heredoc.sql
-    - pop: true
+    - scope: punctuation.definition.string.end.sql
       match: "!\\'"
-      scope: punctuation.definition.string.end.sql
+      pop: true
     match: (?i)q\'!
-    scope: punctuation.definition.string.begin.sql
-  - set:
+  - scope: punctuation.definition.string.begin.sql
+    set:
     - meta_include_prototype: false
     - meta_scope: string.quoted.heredoc.sql
-    - pop: true
+    - scope: punctuation.definition.string.end.sql
       match: \]\'
-      scope: punctuation.definition.string.end.sql
+      pop: true
     match: (?i)q\'\[
-    scope: punctuation.definition.string.begin.sql
-  - set:
+  - scope: punctuation.definition.string.begin.sql
+    set:
     - meta_include_prototype: false
     - meta_scope: string.quoted.heredoc.sql
-    - pop: true
+    - scope: punctuation.definition.string.end.sql
       match: \}\'
-      scope: punctuation.definition.string.end.sql
+      pop: true
     match: (?i)q\'\{
-    scope: punctuation.definition.string.begin.sql
-  - set:
+  - scope: punctuation.definition.string.begin.sql
+    set:
     - meta_include_prototype: false
     - meta_scope: string.quoted.heredoc.sql
-    - pop: true
+    - scope: punctuation.definition.string.end.sql
       match: \)\'
-      scope: punctuation.definition.string.end.sql
+      pop: true
     match: (?i)q\'\(
-    scope: punctuation.definition.string.begin.sql
-  - set:
+  - scope: punctuation.definition.string.begin.sql
+    set:
     - meta_include_prototype: false
     - meta_scope: string.quoted.heredoc.sql
-    - pop: true
+    - scope: punctuation.definition.string.end.sql
       match: \>\'
-      scope: punctuation.definition.string.end.sql
+      pop: true
     match: (?i)q\'\<
-    scope: punctuation.definition.string.begin.sql
 
   like-pattern:
   - match: \'
@@ -1012,11 +1024,11 @@ contexts:
     - match: \'
       scope: punctuation.definition.string.end.sql
       set:
-      - set: expression
+      - scope: keyword.other.sql
+        set: expression
         match: (?i)\b(?:ESCAPE)\b
-        scope: keyword.other.sql
-      - pop: true
-        match: (?=\S)
+      - match: (?=\S)
+        pop: true
 
   comma:
   - match: ','
@@ -1071,8 +1083,8 @@ contexts:
     scope: keyword.control.case.sql
     set:
     - - meta_scope: meta.case.sql
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - case-body
     - - include: pop-on-when
       - include: expression
@@ -1083,8 +1095,8 @@ contexts:
     push:
     - - meta_scope: meta.case.when.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:THEN)\b
@@ -1092,8 +1104,8 @@ contexts:
     push:
     - - meta_scope: meta.case.then.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:ELSE)\b
@@ -1101,8 +1113,8 @@ contexts:
     push:
     - - meta_scope: meta.case.else.sql
       - clear_scopes: 1
-      - pop: true
-        match: ''
+      - match: ''
+        pop: true
     - expression
 
   - match: (?i)\b(?:END)\b

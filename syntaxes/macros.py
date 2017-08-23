@@ -7,8 +7,8 @@ def meta_set(scope):
         { 'match': r'', 'pop': True },
     ]
 
-def expect_keyword(match, scope="keyword.other.sql"):
-    return expect(word(match), scope)
+def expect_keyword(match, scope="keyword.other.sql", set_context=None):
+    return expect(word(match), scope, set_context)
 
 def expect_identifier(scope):
     return [

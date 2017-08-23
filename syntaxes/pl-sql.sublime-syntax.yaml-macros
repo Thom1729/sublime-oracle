@@ -40,7 +40,7 @@ contexts:
   expect-close-paren: !expect [\), punctuation.section.group.end.sql]
 
   pop-on-terminator:
-    - match: (?=[);])
+    - match: (?=\s*[);])
       pop: true
     - include: pop-on-slash
 
@@ -63,7 +63,7 @@ contexts:
 
     - match: !word CREATE
       scope: keyword.other.sql
-      push: [!meta meta.CREATE.sql, create]
+      push: [!meta meta.create.sql, create]
 
     - match: !word DECLARE
       scope: keyword.other.sql
@@ -184,7 +184,11 @@ contexts:
 
     - match: !word TABLE
       scope: keyword.other.sql
-      set: [create-table, expect-table-name]
+      set:
+        - !expect [ !word as, keyword.other.sql, query ]
+        - table-partitioning-clause
+        - !expect_in_parens column-defs
+        - expect-table-name
 
     - match: !word VIEW
       scope: keyword.other.sql
@@ -223,16 +227,6 @@ contexts:
         - !expect_keyword RETURN
         - procedure-spec
 
-  create-table:
-    - include: pop-on-terminator
-    - match: '\('
-      scope: meta.group.sql
-      push: [expect-close-paren, column-defs]
-
-    - match: !word AS
-      scope: keyword.other.sql
-      set: query
-
   column-defs:
     - include: pop-on-terminator
     - include: comma
@@ -242,60 +236,65 @@ contexts:
       push: [column-constraint, expect-column-name]
 
     - match: (?=\S)
-      push: [column-definition, expect-type, expect-column-name]
+      push:
+        - !meta COLUMN_DEFINITION
+        - expect-virtual-column-definition
+        - expect-type
+        - expect-column-name
 
   expect-column-name: !expect_identifier entity.name.column.sql
 
+  expect-virtual-column-definition:
+    - match: !word generated
+      scope: storage.modifier.sql
+      set:
+        - !expect_keyword virtual
+        - !expect_in_parens expression
+        - !expect_keyword as
+        - !expect_keyword always
+    - include: else-pop
+
   expect-type:
-    # - match: ({{ident}})\s*(\.)
-    #   captures:
-    #     1: variable.other.package.sql
-    #     2: punctuation.accessor.sql
-    # - match: ({{ident}})(%type)
-    #   captures:
-    #     1: variable.other.sql
-    #     2: storage.type.sql
-    #   pop: true
-    # - match: ({{ident}})(?:(\s*\()(\d+)(\)))?
-    #   captures:
-    #     1: storage.type.sql
-    #     2: meta.group.sql
-    #     3: constant.numeric.sql
-    #     4: meta.group.sql
-    #   pop: true
-
-    # - match: ({{builtin_type}})(?:\s*(\()(\d*)(\)))?
-    #   captures:
-    #     1: storage.type.sql
-    #     2: meta.group.sql
-    #     3: constant.numeric.sql
-    #     4: meta.group.sql
-    #   pop: true
-
     - match: '{{builtin_type}}'
       scope: storage.type.sql
       set:
-        - match: '(\()(\d*)(\))'
+        - match: '(\()\s*(\d*)\s*(\))'
           captures:
-            1: meta.group.sql
+            1: punctuation.section.group.begin.sql
             2: constant.numeric.sql
-            3: meta.group.sql
+            3: punctuation.section.group.end.sql
           pop: true
         - include: else-pop
 
     - match: (?=\S)
       set: expression
-    # - include: else-pop
-
-  column-definition:
-    - meta_scope: COLUMN_DEFINITION
-    - include: pop-on-terminator
-    - !pop_on ','
 
   column-constraint:
     - include: pop-on-terminator
     - match: !word PRIMARY|KEY
       scope: keyword.other.sql
+
+  table-partitioning-clause:
+    - match: !word partition
+      scope: keyword.other.sql
+      set:
+        - !meta_set meta.create.table.partition.sql
+        - - match: !word list
+            scope: keyword.other.sql
+            set:
+              - !expect_in_parens partition-list-items
+              - !expect_in_parens expression-list
+        - !expect_keyword by
+    - include: else-pop
+
+  partition-list-items:
+    - include: pop-on-terminator
+    - include: comma
+    - match: (?=\S)
+      push:
+        - !expect_keyword [ values, keyword.other.sql, !expect_in_parens expression-list ]
+        - !expect_identifier entity.name.other.partition.sql
+        - !expect_keyword partition
 
   create-view:
     - match: !word AS
@@ -308,7 +307,7 @@ contexts:
       set: query
 
   expect-table-name:
-    - match: (?:([^.\s]+)(\.))({{ident}})
+    - match: (?:([^.\s]+)(\.))?({{ident}})
       captures:
         1: variable.other.package.sql
         2: punctuation.accessor.sql
@@ -449,6 +448,9 @@ contexts:
 
   expression:
     - include: scope:source.sql.oracle#expression
+
+  expression-list:
+    - include: scope:source.sql.oracle#expression-list
 
   query:
     - include: scope:source.sql.oracle#query

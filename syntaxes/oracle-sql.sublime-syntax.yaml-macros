@@ -97,7 +97,7 @@ contexts:
   expect-close-paren: !expect [ \), punctuation.section.group.end.sql ]
 
   pop-on-terminator:
-    - !pop_on '[);]'
+    - !pop_on '\s*[);]'
     - include: pop-on-slash
 
   pop-on-slash:
@@ -121,7 +121,7 @@ contexts:
     - match: !word INSERT
       scope: keyword.other.sql
       push:
-        - - meta_scope: meta.INSERT.sql
+        - - meta_scope: meta.insert.sql
           - match: !word INTO
             scope: keyword.other.sql
             push:
@@ -133,14 +133,14 @@ contexts:
     - match: !word UPDATE
       scope: keyword.other.sql
       push:
-        - - meta_scope: meta.UPDATE.sql
+        - - meta_scope: meta.update.sql
           - include: query
         - expect-hint
 
     - match: !word DELETE
       scope: keyword.other.sql
       push:
-        - - meta_scope: meta.DELETE.sql
+        - - meta_scope: meta.delete.sql
           - include: query
         - expect-hint
 
@@ -149,10 +149,10 @@ contexts:
       push: statement-merge
 
     - match: (?=\S)
-      push: expression
+      push: query
 
   statement-merge:
-    - meta_scope: meta.MERGE.sql
+    - meta_scope: meta.merge.sql
 
     - match: !word INTO
       scope: keyword.other.sql
@@ -369,13 +369,12 @@ contexts:
       scope: keyword.other.sql
       set: !expect_in_parens expression
 
-    - match: '{{unquoted_identifier}}'
-      scope: variable.other.table
+    - match: (?={{general_identifier}})
       set:
-        - match: '@'
-          scope: punctuation.accessor.dblink.sql
-          set: !expect_identifier variable.other.dblink.sql
-        - include: else-pop
+        - !expect [ '@', punctuation.accessor.dblink.sql, !expect_identifier variable.other.dblink.sql ]
+        - !expect_identifier variable.other.table
+
+    - include: else-pop
 
   expect-alias-or-keyword:
     - include: query-breaker
@@ -437,7 +436,7 @@ contexts:
 
     - match: (?=\()
       set:
-        - !meta meta.PARENS.sql
+        - !meta meta.group.sql
         - !expect_in_parens expression-list-or-subquery
 
     - include: else-pop
@@ -461,7 +460,6 @@ contexts:
     - match: !word OVER
       scope: keyword.other.sql
       push:
-        - !meta meta.ANALYTIC.sql
         - expect-close-paren
         - analytic-clause-contents
         - expect-open-paren
