@@ -1,4 +1,30 @@
-from YAMLMacros.lib.syntax import meta, expect, pop_on, stack
+from YAMLMacros.lib.syntax import meta, stack
+
+def expect(expr, scope, set_context=None):
+    ret = [
+        { "match": expr, "scope": scope },
+        # { "match": r'(?=\S)', "pop": True },
+        pop_unless(expr)
+    ]
+
+    if set_context:
+        ret[0]['set'] = set_context
+    else:
+        ret[0]['pop'] = True
+
+    return ret
+
+def pop_on(expr):
+    return {
+        "match": r'(?=\s*(?:%s))' % expr,
+        "pop": True
+    }
+
+def pop_unless(expr):
+    return {
+        "match": r'(?=\s*(?!%s)\S)' % expr,
+        "pop": True
+    }
 
 def meta_set(scope):
     return [
@@ -24,7 +50,7 @@ def expect_identifier(scope):
             'pop': True,
         },
 
-        { 'match': r'(?=\S)', 'pop': True },
+        pop_unless(r'{{general_identifier}}'),
     ]
     
 def expect_in_parens(contents):
@@ -80,3 +106,21 @@ def heredoc(start, end):
             },
         ],
     }
+
+def list_of(context):
+    return [{
+        'match': r'',
+        'set': [
+            [
+                {
+                    'match': ',',
+                    'scope': 'punctuation.separator.comma.sql',
+                    'push': context,
+                },
+                {
+                    'include': 'else-pop',
+                }
+            ],
+            context,
+        ]
+    }]

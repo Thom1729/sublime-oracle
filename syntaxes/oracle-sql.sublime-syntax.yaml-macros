@@ -31,6 +31,7 @@ contexts:
     - include: comments
 
   comments:
+    - match: \s+(?=--|/\*) # Consume whitespace before comments
     - match: /\*
       scope: punctuation.definition.comment.begin.sql
       push:
@@ -93,11 +94,8 @@ contexts:
     - match: (?=\S)
       pop: true
 
-  expect-open-paren: !expect [ \(, punctuation.section.group.begin.sql ]
-  expect-close-paren: !expect [ \), punctuation.section.group.end.sql ]
-
   pop-on-terminator:
-    - !pop_on '\s*[);]'
+    - !pop_on '[);]'
     - include: pop-on-slash
 
   pop-on-slash:
@@ -179,10 +177,7 @@ contexts:
 
     - match: !word INSERT
       scope: keyword.other.sql
-      set:
-        - expect-close-paren
-        - expression-list
-        - expect-open-paren
+      set: !expect_in_parens expression-list
 
   pop-on-when: [ !pop_on [ !word WHEN ] ]
 
@@ -261,9 +256,7 @@ contexts:
       scope: keyword.other.sql
       push:
         - !meta_set meta.query.pivot.sql
-        - expect-close-paren
-        - query-pivot-clause-body
-        - expect-open-paren
+        - !expect_in_parens query-pivot-clause-body
         - !expect_keyword XML
 
     - match: !word BULK
@@ -273,6 +266,10 @@ contexts:
         - match: !word INTO
           set: !expect_identifier variable.other.table.sql
         - include: else-pop
+
+    - match: !word RETURNING
+      scope: keyword.other.sql
+      push: expression-list
 
     - match: !word INTO
       scope: keyword.other.sql
@@ -329,16 +326,13 @@ contexts:
         - !expect_keyword as
         - !expect_identifier entity.name.subquery.sql
 
-  select-list:
-    - include: pop-on-terminator
-    - include: comma
+  select-list: !list_of select-expression
 
-    - match: (?=\S)
-      push:
-        - !meta meta.select-expression
-        - !expect_identifier entity.name.alias.sql
-        - !expect_keyword as
-        - expression
+  select-expression: !stack
+    - !meta meta.select-expression.sql
+    - !expect_identifier entity.name.alias.sql
+    - !expect_keyword as
+    - expression
 
   query-from-block:
     - include: query-block
@@ -350,11 +344,8 @@ contexts:
         - table-expression
 
   table-expression:
-    - match: \(
-      scope: punctuation.section.group.begin.sql
-      set:
-        - expect-close-paren
-        - query
+    - match: (?=\()
+      set: !expect_in_parens query
 
     - match: \b({{unquoted_identifier}})\s*(\.)
       captures:
@@ -382,51 +373,55 @@ contexts:
 
   expect-alias: !expect_identifier entity.name.alias
 
-  query-pivot-clause-body:
-    - match: !word FOR
-      scope: keyword.other.sql
-      push:
-        - !meta_set meta.query.pivot.for.sql
-        - !expect_in_parens expression-list
+  query-pivot-clause-body: !stack
+    - - match: !word IN
+        scope: keyword.other.sql
+        push:
+          - !meta_set meta.query.pivot.in.sql
+          - !expect_in_parens select-list
 
-    - match: !word IN
-      scope: keyword.other.sql
-      push:
-        - !meta_set meta.query.pivot.in.sql
-        - !expect_in_parens select-list
+      - include: else-pop
 
-    - include: select-list
+    - - match: !word FOR
+        scope: keyword.other.sql
+        push:
+          - !meta_set meta.query.pivot.for.sql
+          - !expect_in_parens expression-list
+
+      - include: else-pop
+
+    - select-list
 
 # Expressions ##################################################################
 
-  expression-list:
-    - include: pop-on-terminator
+  expression-list: !stack [ expression-list-end, expression ]
 
-    - include: comma
-
-    - match: (?=\S)
+  expression-list-end:
+    - match: ','
+      scope: punctuation.separator.comma.sql
       push: expression
+    - include: else-pop
 
   expression:
     !stack [ expression-end, expression-begin ]
 
   expression-begin:
+    - meta_scope: FOOOO
     - include: pop-on-terminator
-    - !pop_on '\s*,'
+    - !pop_on ','
 
     - include: operators-prefix
     - include: literals
     - include: case-expression
     - include: builtins
     
-    - !pop_on '{{reserved}}'
-
-    - match: (?={{unquoted_identifier}}\s*\()
+    - match: (?={{general_identifier}}\s*\()
       set:
+        - !meta meta.function-call.sql
         - - include: function-arguments
           - include: else-pop
-        - !meta meta.function-call.sql
-        - - include: variable
+        - - include: builtin-functions
+          - include: function-name
 
     - include: variable
 
@@ -443,7 +438,8 @@ contexts:
 
   expression-end:
     - include: pop-on-terminator
-    - !pop_on '\s*\b(?i:WHEN|THEN|ELSE|END)\b'
+    - !pop_on [ !word WHEN|THEN|ELSE|END ]
+    - !pop_on ','
 
     - include: operators-infix
     - include: operators-postfix
@@ -459,15 +455,12 @@ contexts:
 
     - match: !word OVER
       scope: keyword.other.sql
-      push:
-        - expect-close-paren
-        - analytic-clause-contents
-        - expect-open-paren
+      push: !expect_in_parens analytic-clause-contents
 
     - include: else-pop
 
   function-arguments: !stack
-    - !meta meta.function-call.arguments.sql
+    - !meta_set meta.function-call.arguments.sql
     - !expect_in_parens expression-list
 
   expression-list-or-subquery:
@@ -479,19 +472,15 @@ contexts:
   operators-prefix:
     - match: '-|\+'
       scope: keyword.operator.arithmetic.sql
-      push: expression-begin
 
     - match: !word NOT
       scope: keyword.operator.logical.sql
-      push: expression-begin
 
     - match: !word EXISTS|ANY|SOME|ALL|PRIOR|DISTINCT
       scope: keyword.operator.word.sql
-      push: expression-begin
 
     - match: !word NEW
       scope: keyword.operator.word.sql
-      push: expression-begin
 
   operators-infix:
     - match: \.(?!\.)
@@ -550,11 +539,6 @@ contexts:
       scope: keyword.operator.join.sql
 
   variable:
-    - match: (?={{general_identifier}}\s*(?=\()(?!\(\+\)))
-      set:
-        - include: builtin-functions
-        - include: function-name
-
     - match: (?={{general_identifier}})
       set: !expect_identifier variable.other.sql
 
@@ -591,18 +575,41 @@ contexts:
         - include: expression-list
 
   literals:
-    - match: '(?i)(\b\d+(\.\d*)?|\.\d+\b)(e[-+]?\d+)?'
+    - match: '(?i)[-+]?(\b\d+(\.\d*)?|\.\d+)(e[-+]?\d+)?[fd]?'
       scope: constant.numeric.sql
       pop: true
 
     - match: !word NULL
       scope: constant.language.null.sql
       pop: true
+
+    - match: !word TRUE
+      scope: constant.language.boolean.true.sql
+      pop: true
+
+    - match: !word FALSE
+      scope: constant.language.boolean.false.sql
+      pop: true
     
     - include: string
 
+    - match: !word INTERVAL
+      scope: keyword.other.sql
+      set:
+        - - match: !word YEAR|MONTH|DAY|HOUR|MINUTE|SECOND|TO
+            scope: keyword.other.sql
+          - include: else-pop
+        - - include: string
+          - include: else-pop
+
+    - match: !word DATE|TIMESTAMP
+      scope: keyword.other.sql
+      set:
+        - include: string
+        - include: else-pop
+
   string:
-    - match: \'
+    - match: (?i:n)?\'
       scope: punctuation.definition.string.begin.sql
       set:
         - meta_include_prototype: false
@@ -679,6 +686,10 @@ contexts:
       pop: true
     - match: !word bfilename|decode|dump|empty_blob|empty_clob|greatest|least|nls_charset_(?:decl_len|id|name)|nvl|sys_context|sys_guid|uid|user|userenv|vsize
       scope: support.function.misc.sql
+      pop: true
+
+    - match: !word APPROX_COUNT_DISTINCT|AVG|COLLECT|CORR(_K|_S)?|COUNT|COVAR(_POP|_SAMP)|CUME_DIST|FIRST|GROUP_ID|GROUPING(_ID)?|LAST|LISTAGG|MAX|MEDIAN|MIN|PERCENTILE(_CONT|_DISC)|(DENSE_|PERCENT_)?RANK|REGR_(SLOPE|INTERCEPT|COUNT|R2|AVG[XY]|SX[XY]|SYY)|STATS_(BINOMIAL_TEST|CROSSTAB|MODE|ONE_WAY_ANOVA|(F|KS|MW|T|WSR)_TEST)|STDDEV(_POP|_SAMP)?|SUM|SYS_OP_ZONE_ID|VAR(_POP|_SAMP|IANCE)|(SYS_)?XMLAGG
+      scope: support.function.aggregate.sql
       pop: true
 
   case-expression:

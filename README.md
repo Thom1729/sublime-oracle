@@ -10,6 +10,7 @@ Sublime Oracle can be installed via [Package Control](https://packagecontrol.io/
 
 - Supports Oracle-specific constructs like `pivot` clauses, quoted identifiers, and factored subqueries.
 - Detailed meta scopes for scripting and for the Expand Selection to Scope command.
+- Factored subqueries appear in the symbol list.
 
 ## Current Limitations
 

@@ -15,17 +15,11 @@ variables:
   unquoted_identifier: '(?!{{reserved}}){{ident}}'
   general_identifier: '(?:{{unquoted_identifier}}|"[^"]*")'
 
-  builtin_type: !word N?CHAR|N?VARCHAR2?|CLOB|NUMBER|INTEGER
+  builtin_type: !word N?CHAR|N?VARCHAR2?|CLOB|NUMBER|INTEGER|JSON|DATE|BOOLEAN|EXCEPTION
 
 contexts:
   main:
-    - match: (?=\S)
-      push:
-        - meta_scope: meta.command.plsql
-        - match: ';'
-          scope: punctuation.terminator.statement.sql
-          pop: true
-        - include: statements
+    - include: statements
 
   prototype:
     - include: scope:source.sql.oracle#comments
@@ -35,9 +29,6 @@ contexts:
   else-pop:
     - match: (?=\S)
       pop: true
-
-  expect-open-paren: !expect [\(, punctuation.section.group.begin.sql]
-  expect-close-paren: !expect [\), punctuation.section.group.end.sql]
 
   pop-on-terminator:
     - match: (?=\s*[);])
@@ -79,6 +70,13 @@ contexts:
         - !expect_keyword THEN
         - expression
 
+    - match: !word LOOP
+      scope: keyword.control.sql
+      push:
+        - !meta meta.loop.sql
+        - - !end LOOP
+          - include: statements
+
     - match: !word WHILE
       scope: keyword.control.sql
       push: 
@@ -116,6 +114,10 @@ contexts:
         - !expect_keyword FOR
         - !expect_identifier variable.other.cursor.sql
         - !expect [ ':', punctuation.definition.cursor.host.sql ]
+
+    - match: !word RAISE
+      scope: keyword.other.sql
+      push: !expect_identifier variable.other.sql
 
     - match: (?=\S)
       push: statement-simple
@@ -201,7 +203,7 @@ contexts:
     - match: !word PACKAGE
       scope: keyword.other.sql
       set:
-        - !meta meta.PACKAGE.sql
+        - !meta meta.package.sql
         - - !end
           - include: declarations
         - !expect_keyword IS|AS
@@ -213,15 +215,17 @@ contexts:
     - match: !word PROCEDURE
       scope: keyword.other.sql
       push:
-        - !meta meta.definition.sql.function
+        - !meta meta.function.sql
         - procedure-definition
+        - !meta_set meta.function.declaration.sql
         - procedure-spec
 
     - match: !word FUNCTION
       scope: keyword.other.sql
       push:
-        - !meta meta.definition.sql.function
+        - !meta meta.function.sql
         - procedure-definition
+        - !meta_set meta.function.declaration.sql
         - !expect_keyword PIPELINED
         - expect-type
         - !expect_keyword RETURN
@@ -356,11 +360,12 @@ contexts:
         - !meta meta.parameter.sql-declaration
         - expect-default-value
         - expect-type
-        - !expect_keyword [ IN|OUT|DEFAULT, storage.modifier.sql ]
+        - !expect_keyword [ OUT, storage.modifier.sql ]
+        - !expect_keyword [ IN, storage.modifier.sql ]
 
   expect-default-value:
     - match: !word DEFAULT
-      scope: keyword.other.sql
+      scope: storage.modifier.sql
       set: expression
     - match: ':='
       scope: keyword.operator.assignment.sql
@@ -388,15 +393,17 @@ contexts:
     - match: !word PROCEDURE
       scope: storage.type.function.sql
       push:
-        - !meta meta.definition.sql.procedure
+        - !meta meta.function.sql
         - procedure-definition
+        - !meta_set meta.function.definition.sql
         - procedure-spec
 
     - match: !word FUNCTION
       scope: storage.type.function.sql
       push:
-        - !meta meta.definition.sql.procedure
+        - !meta meta.function.sql
         - procedure-definition
+        - !meta_set meta.function.definition.sql
         - !expect_keyword PIPELINED
         - expect-type
         - !expect_keyword RETURN
@@ -405,10 +412,7 @@ contexts:
     - match: '{{unquoted_identifier}}'
       scope: variable.other.sql
       push:
-        - - match: ':='
-            scope: keyword.operator.assignment.sql
-            set: expression
-          - include: else-pop
+        - - include: expect-default-value
         - expect-type
         - !expect_keyword [ CONSTANT, storage.modifier.sql ]
   
@@ -416,15 +420,14 @@ contexts:
     - match: !word RECORD
       scope: storage.type.sql
       set:
-        - match: '\('
-          scope: meta.group.sql
-          push: [expect-close-paren, column-defs]
+        - match: (?=\()
+          set: !expect_in_parens column-defs
         - include: else-pop
 
     - match: !word TABLE
       scope: storage.type.sql
       set:
-        - !expect_identifier variable.other.type
+        - - include: expect-type
         - !expect_keyword OF
 
 
