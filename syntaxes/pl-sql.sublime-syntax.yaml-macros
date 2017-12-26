@@ -54,7 +54,15 @@ contexts:
 
     - match: !word CREATE
       scope: keyword.other.sql
-      push: [!meta meta.create.sql, create]
+      push:
+        - !meta meta.create.sql
+        - create
+
+    - match: !word DROP
+      scope: keyword.other.sql
+      push:
+        - !meta meta.drop.sql
+        - drop
 
     - match: !word DECLARE
       scope: keyword.other.sql
@@ -196,11 +204,17 @@ contexts:
 
     - match: !word VIEW
       scope: keyword.other.sql
-      set: [create-view, expect-table-name]
+      set:
+        - create-view
+        - expect-table-name
 
-    - match: !word MATERIALIZED\s+VIEW
+    - match: !word MATERIALIZED
       scope: keyword.other.sql
-      set: [create-materialized-view, expect-table-name]
+      set:
+        - - include: immediately-pop
+        - create-materialized-view
+        - expect-table-name
+        - !expect_keyword VIEW
 
     - match: !word PACKAGE
       scope: keyword.other.sql
@@ -233,18 +247,33 @@ contexts:
         - !expect_keyword RETURN
         - procedure-spec
 
+    - match: !word SEQUENCE
+      scope: keyword.other.sql
+      push:
+        - !expect_identifier entity.name.sequence.sql
+        - expect-schema-name
+
+    - match: !word TRIGGER
+      scope: keyword.other.sql
+      push:
+        - !expect_identifier entity.name.trigger.sql
+        - expect-schema-name
+
   column-defs:
     - include: pop-on-terminator
     - include: comma
 
     - match: !word CONSTRAINT
       scope: keyword.other.sql
-      push: [column-constraint, expect-column-name]
+      push:
+        - column-constraint
+        - expect-column-name
 
     - match: (?=\S)
       push:
-        - !meta COLUMN_DEFINITION
+        - !meta meta.column-definition.sql
         - expect-virtual-column-definition
+        - expect-default-value
         - expect-type
         - expect-column-name
 
@@ -312,14 +341,9 @@ contexts:
       scope: keyword.other.sql
       set: query
 
-  expect-table-name:
-    - match: (?:([^.\s]+)(\.))?({{ident}})
-      captures:
-        1: variable.other.package.sql
-        2: punctuation.accessor.sql
-        3: entity.name.table.sql
-      pop: true
-    - include: else-pop
+  expect-table-name: !stack
+    - !expect_identifier entity.name.table.js
+    - expect-schema-name
 
   expect-schema-name:
     - match: ({{ident}}(?:<xx>)?)(\.)
@@ -432,6 +456,18 @@ contexts:
         - - include: expect-type
         - !expect_keyword OF
 
+  drop:
+    - match: !word TABLE
+      scope: keyword.other.sql
+      set: expect-table-name
+
+    - match: !word SEQUENCE
+      scope: keyword.other.sql
+      set:
+        - !expect_identifier entity.name.sequence.js
+        - expect-schema-name
+
+    - include: else-pop
 
 # Expressions ##################################################################
 

@@ -407,7 +407,6 @@ contexts:
     !stack [ expression-end, expression-begin ]
 
   expression-begin:
-    - meta_scope: FOOOO
     - include: pop-on-terminator
     - !pop_on ','
 

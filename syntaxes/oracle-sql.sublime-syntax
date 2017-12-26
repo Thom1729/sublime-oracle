@@ -728,7 +728,6 @@ contexts:
         - expression-begin
 
   expression-begin:
-    - meta_scope: FOOOO
     - include: pop-on-terminator
     - match: (?=\s*(?:,))
       pop: true

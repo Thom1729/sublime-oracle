@@ -53,7 +53,19 @@ contexts:
 
     - match: (?i)\b(?:CREATE)\b
       scope: keyword.other.sql
-      push: [[{meta_scope: meta.create.sql}, {match: '', pop: true}], create]
+      push:
+        -   - meta_scope: meta.create.sql
+            - match: ''
+              pop: true
+        - create
+
+    - match: (?i)\b(?:DROP)\b
+      scope: keyword.other.sql
+      push:
+        -   - meta_scope: meta.drop.sql
+            - match: ''
+              pop: true
+        - drop
 
     - match: (?i)\b(?:DECLARE)\b
       scope: keyword.other.sql
@@ -343,12 +355,23 @@ contexts:
 
     - match: (?i)\b(?:VIEW)\b
       scope: keyword.other.sql
-      set: [create-view, expect-table-name]
+      set:
+        - create-view
+        - expect-table-name
 
-    - match: (?i)\b(?:MATERIALIZED\s+VIEW)\b
+    - match: (?i)\b(?:MATERIALIZED)\b
       scope: keyword.other.sql
-      set: [create-materialized-view, expect-table-name]
+      set:
+        -   - include: immediately-pop
+        - create-materialized-view
+        - expect-table-name
+        -                 
 
+            - match: (?i)\b(?:VIEW)\b
+              pop: true
+              scope: keyword.other.sql
+            - match: (?=\s*(?!(?i)\b(?:VIEW)\b)\S)
+              pop: true
     - match: (?i)\b(?:PACKAGE)\b
       scope: keyword.other.sql
       set:
@@ -434,20 +457,57 @@ contexts:
               pop: true
         - procedure-spec
 
+    - match: (?i)\b(?:SEQUENCE)\b
+      scope: keyword.other.sql
+      push:
+        -   - match: '{{unquoted_identifier}}'
+              pop: true
+              scope: entity.name.sequence.sql
+            - match: (")([^"]+)(")
+              captures:
+                '3': punctuation.definition.string.end.sql
+                '2': entity.name.sequence.sql
+                '1': punctuation.definition.string.begin.sql
+              pop: true
+              scope: string.quoted.double.sql
+            - match: (?=\s*(?!{{general_identifier}})\S)
+              pop: true
+        - expect-schema-name
+
+    - match: (?i)\b(?:TRIGGER)\b
+      scope: keyword.other.sql
+      push:
+        -   - match: '{{unquoted_identifier}}'
+              pop: true
+              scope: entity.name.trigger.sql
+            - match: (")([^"]+)(")
+              captures:
+                '3': punctuation.definition.string.end.sql
+                '2': entity.name.trigger.sql
+                '1': punctuation.definition.string.begin.sql
+              pop: true
+              scope: string.quoted.double.sql
+            - match: (?=\s*(?!{{general_identifier}})\S)
+              pop: true
+        - expect-schema-name
+
   column-defs:
     - include: pop-on-terminator
     - include: comma
 
     - match: (?i)\b(?:CONSTRAINT)\b
       scope: keyword.other.sql
-      push: [column-constraint, expect-column-name]
+      push:
+        - column-constraint
+        - expect-column-name
 
     - match: (?=\S)
       push:
-        -   - meta_scope: COLUMN_DEFINITION
+        -   - meta_scope: meta.column-definition.sql
             - match: ''
               pop: true
         - expect-virtual-column-definition
+        - expect-default-value
         - expect-type
         - expect-column-name
 
@@ -608,14 +668,21 @@ contexts:
       set: query
 
   expect-table-name:
-    - match: (?:([^.\s]+)(\.))?({{ident}})
-      captures:
-        1: variable.other.package.sql
-        2: punctuation.accessor.sql
-        3: entity.name.table.sql
-      pop: true
-    - include: else-pop
-
+    - match: (?=\S)
+      set:
+        -   - match: '{{unquoted_identifier}}'
+              pop: true
+              scope: entity.name.table.js
+            - match: (")([^"]+)(")
+              captures:
+                '3': punctuation.definition.string.end.sql
+                '2': entity.name.table.js
+                '1': punctuation.definition.string.begin.sql
+              pop: true
+              scope: string.quoted.double.sql
+            - match: (?=\s*(?!{{general_identifier}})\S)
+              pop: true
+        - expect-schema-name
   expect-schema-name:
     - match: ({{ident}}(?:<xx>)?)(\.)
       captures:
@@ -809,12 +876,35 @@ contexts:
         -   - include: expect-type
         -                 
 
-
             - match: (?i)\b(?:OF)\b
               pop: true
               scope: keyword.other.sql
             - match: (?=\s*(?!(?i)\b(?:OF)\b)\S)
               pop: true
+  drop:
+    - match: (?i)\b(?:TABLE)\b
+      scope: keyword.other.sql
+      set: expect-table-name
+
+    - match: (?i)\b(?:SEQUENCE)\b
+      scope: keyword.other.sql
+      set:
+        -   - match: '{{unquoted_identifier}}'
+              pop: true
+              scope: entity.name.sequence.js
+            - match: (")([^"]+)(")
+              captures:
+                '3': punctuation.definition.string.end.sql
+                '2': entity.name.sequence.js
+                '1': punctuation.definition.string.begin.sql
+              pop: true
+              scope: string.quoted.double.sql
+            - match: (?=\s*(?!{{general_identifier}})\S)
+              pop: true
+        - expect-schema-name
+
+    - include: else-pop
+
 # Expressions ##################################################################
 
   statement-simple:
