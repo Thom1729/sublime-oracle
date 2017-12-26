@@ -179,7 +179,8 @@ contexts:
       scope: keyword.other.sql
       set: !expect_in_parens expression-list
 
-  pop-on-when: [ !pop_on [ !word WHEN ] ]
+  pop-on-when:
+    - !pop_on [ !word WHEN ]
 
 # Queries ######################################################################
 

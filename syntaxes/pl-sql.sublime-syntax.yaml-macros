@@ -141,7 +141,9 @@ contexts:
 
     - match: !word WHEN
       scope: keyword.other.sql
-      push: [ !expect_keyword THEN, exception-type ]
+      push:
+        - !expect_keyword THEN
+        - exception-type
 
     - include: statements
 
