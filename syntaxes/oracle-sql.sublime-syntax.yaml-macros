@@ -12,6 +12,25 @@ variables:
   general_identifier: '(?:{{unquoted_identifier}}|"[^"]*")'
   reserved: !word ACCESS|ADD|ALL|ALTER|AND|ANY|AS|ASC|AUDIT|BETWEEN|BY|CHAR|CHECK|CLUSTER|COLUMN|COLUMN_VALUE|COMMENT|COMPRESS|CONNECT|CREATE|CURRENT|DATE|DECIMAL|DEFAULT|DELETE|DESC|DISTINCT|DROP|ELSE|EXCLUSIVE|EXISTS|FILE|FLOAT|FOR|FROM|GRANT|GROUP|HAVING|IDENTIFIED|IMMEDIATE|IN|INCREMENT|INDEX|INITIAL|INSERT|INTEGER|INTERSECT|INTO|IS|LEVEL|LIKE|LOCK|LONG|MAXEXTENTS|MINUS|MLSLABEL|MODE|MODIFY|NESTED_TABLE_ID|NOAUDIT|NOCOMPRESS|NOT|NOWAIT|NULL|NUMBER|OF|OFFLINE|ON|ONLINE|OPTION|OR|ORDER|PCTFREE|PRIOR|PUBLIC|RAW|RENAME|RESOURCE|REVOKE|ROW|ROWID|ROWNUM|ROWS|SELECT|SESSION|SET|SHARE|SIZE|SMALLINT|START|SUCCESSFUL|SYNONYM|SYSDATE|TABLE|THEN|TO|TRIGGER|UID|UNION|UNIQUE|UPDATE|USER|VALIDATE|VALUES|VARCHAR|VARCHAR2|VIEW|WHENEVER|WHERE|WITH
 
+  hint_name: |-
+    (?ix:\b(?:
+      ALL_ROWS|APPEND|APPEND_VALUES|CACHE|CHANGE_DUPKEY_ERROR_INDEX|CLUSTER|CLUSTERING|CONTAINERS
+      |CURSOR_SHARING_EXACT|DISABLE_PARALLEL_DML|DRIVING_SITE|DYNAMIC_SAMPLING|ENABLE_PARALLEL_DML
+      |FACT|FIRST_ROWS|FRESH_MV|FULL|GATHER_OPTIMIZER_STATISTICS|GROUPING|HASH
+      |IGNORE_ROW_ON_DUPKEY_INDEX|INDEX|INDEX_ASC|INDEX_COMBINE|INDEX_DESC|INDEX_FFS|INDEX_JOIN
+      |INDEX_SS|INDEX_SS_ASC|INDEX_SS_DESC|INMEMORY|INMEMORY_PRUNING|LEADING|MERGE
+      |MODEL_MIN_ANALYSIS|MONITOR|NATIVE_FULL_OUTER_JOIN|NOAPPEND|NOCACHE|NO_CLUSTERING|NO_EXPAND
+      |NO_FACT|NO_GATHER_OPTIMIZER_STATISTICS|NO_INDEX|NO_INDEX_FFS|NO_INDEX_SS|NO_INMEMORY
+      |NO_INMEMORY_PRUNING|NO_MERGE|NO_MONITOR|NO_NATIVE_FULL_OUTER_JOIN|NO_PARALLEL|NOPARALLEL
+      |NO_PARALLEL_INDEX|NOPARALLEL_INDEX|NO_PQ_CONCURRENT_UNION|NO_PQ_SKEW|NO_PUSH_PRED
+      |NO_PUSH_SUBQ|NO_PX_JOIN_FILTER|NO_QUERY_TRANSFORMATION|NO_RESULT_CACHE|NO_REWRITE|NOREWRITE
+      |NO_STAR_TRANSFORMATION|NO_STATEMENT_QUEUING|NO_UNNEST|NO_USE_BAND|NO_USE_CUBE|NO_USE_HASH
+      |NO_USE_MERGE|NO_USE_NL|NO_XML_QUERY_REWRITE|NO_XMLINDEX_REWRITE|NO_ZONEMAP
+      |OPTIMIZER_FEATURES_ENABLE|OPT_PARAM|ORDERED|PARALLEL|PARALLEL_INDEX|PQ_CONCURRENT_UNION
+      |PQ_DISTRIBUTE|PQ_FILTER|PQ_SKEW|PUSH_PRED|PUSH_SUBQ|PX_JOIN_FILTER|QB_NAME|RESULT_CACHE
+      |RETRY_ON_ROW_CHANGE|REWRITE|STAR_TRANSFORMATION|STATEMENT_QUEUING|UNNEST|USE_BAND|USE_CONCAT
+      |USE_CUBE|USE_HASH|USE_MERGE|USE_NL|USE_NL_WITH_INDEX
+    )\b)
 contexts:
   main:
     # Try other partial matches
@@ -49,44 +68,44 @@ contexts:
     - meta_include_prototype: false
 
     - match: /\*\+
-      scope: punctuation.definition.comment.begin.sql
-      set:
-        - meta_include_prototype: false
-        - meta_scope: comment.block.sql
-
-        - match: \*/
-          scope: punctuation.definition.comment.end.sql
-          pop: true
-
-        - include: hint
-          with_prototype:
-            - match: (?=\*/)
-              pop: true
+      scope: comment.block.sql punctuation.definition.comment.begin.sql
+      embed: hint-comment
+      embed_scope: comment.block.sql
+      escape: \*/
+      escape_captures:
+        0: comment.block.sql punctuation.definition.comment.end.sql
 
     - match: --\+
-      scope: punctuation.definition.comment.begin.sql
-      set:
-        - meta_include_prototype: false
-        - meta_scope: comment.inline.sql
-
-        - match: $
-          pop: true
-
-        - include: hint
-          with_prototype:
-            - match: $
-              pop: true
+      scope: comment.inline.sql punctuation.definition.comment.begin.sql
+      embed: hint-comment
+      embed_scope: comment.inline.sql
+      escape: $
 
     - include: comments
     - include: else-pop
 
+  hint-comment:
+    - meta_include_prototype: false
+    - include: hint
+
   hint:
-    - match: (?i)\b([\w]+)\b
+    - match: '{{hint_name}}'
+      scope: support.function.hint.sql
       push:
-        - clear_scopes: 1
-        - meta_scope: support.function.hint.sql
-        - match: ''
-          pop: true
+        - - clear_scopes: 1
+          - meta_scope: meta.hint.sql
+          - match: ''
+            pop: true
+        - !expect_in_parens hint-arguments
+
+  hint-arguments:
+    - match: '@'
+      scope: punctuation.definition.query-block.sql
+      push: !expect_identifier variable.other.table.sql
+    - match: (?=')
+      push: string
+    - match: (?=\d)
+      push: number
 
 # Utility ######################################################################
 
@@ -548,6 +567,10 @@ contexts:
         1: punctuation.definition.parameter.sql
       pop: true
 
+    - match: \?
+      scope: variable.language.placeholder.sql
+      pop: true
+
   function-name: !expect_identifier variable.function.sql
 
   analytic-clause-contents:
@@ -575,9 +598,7 @@ contexts:
         - include: expression-list
 
   literals:
-    - match: '(?i)[-+]?(\b\d+(\.\d*)?|\.\d+)(e[-+]?\d+)?[fd]?'
-      scope: constant.numeric.sql
-      pop: true
+    - include: number
 
     - match: !word NULL
       scope: constant.language.null.sql
@@ -607,6 +628,11 @@ contexts:
       set:
         - include: string
         - include: else-pop
+
+  number:
+    - match: '(?i)[-+]?(\b\d+(\.\d*)?|\.\d+)(e[-+]?\d+)?[fd]?'
+      scope: constant.numeric.sql
+      pop: true
 
   string:
     - match: (?i:n)?\'
