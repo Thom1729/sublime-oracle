@@ -1,8 +1,8 @@
-from YAMLMacros.lib.syntax import meta, stack
+from YAMLMacros.lib.syntax import meta, stack, rule
 
 def expect(expr, scope, set_context=None):
     ret = [
-        { "match": expr, "scope": scope },
+        rule(match=expr, scope=scope),
         # { "match": r'(?=\S)', "pop": True },
         pop_unless(expr)
     ]
@@ -15,22 +15,22 @@ def expect(expr, scope, set_context=None):
     return ret
 
 def pop_on(expr):
-    return {
-        "match": r'(?=\s*(?:%s))' % expr,
-        "pop": True
-    }
+    return rule(
+        match=r'(?=\s*(?:%s))' % expr,
+        pop=True
+    )
 
 def pop_unless(expr):
-    return {
-        "match": r'(?=\s*(?!%s)\S)' % expr,
-        "pop": True
-    }
+    return rule(
+        match=r'(?=\s*(?!%s)\S)' % expr,
+        pop=True
+    )
 
 def meta_set(scope):
     return [
-        { 'meta_scope': scope },
-        { 'clear_scopes': 1 },
-        { 'match': r'', 'pop': True },
+        rule(meta_scope=scope),
+        rule(clear_scopes=1),
+        rule(match=r'', pop=True),
     ]
 
 def expect_keyword(match, scope="keyword.other.sql", set_context=None):
@@ -38,32 +38,32 @@ def expect_keyword(match, scope="keyword.other.sql", set_context=None):
 
 def expect_identifier(scope):
     return [
-        { 'match': r'{{unquoted_identifier}}', 'scope': scope, 'pop': True },
-        {
-            'match': r'(")([^"]+)(")',
-            'scope': 'string.quoted.double.sql',
-            'captures': {
+        rule(match=r'{{unquoted_identifier}}', scope=scope, pop=True),
+        rule(
+            match=r'(")([^"]+)(")',
+            scope='string.quoted.double.sql',
+            captures={
                 '1': 'punctuation.definition.string.begin.sql',
                 '2': scope,
                 '3': 'punctuation.definition.string.end.sql',
             },
-            'pop': True,
-        },
+            pop=True,
+        ),
 
         pop_unless(r'{{general_identifier}}'),
     ]
     
 def expect_in_parens(contents):
     return [
-        {
-            'match': r'\(',
-            'scope': 'punctuation.section.group.begin.sql',
-            'set': [
+        rule(
+            match=r'\(',
+            scope='punctuation.section.group.begin.sql',
+            set=[
                 expect(r'\)', 'punctuation.section.group.end.sql'),
                 contents,
             ],
-        },
-        { 'match': r'(?=\S)', 'pop': True },
+        ),
+        rule(match=r'(?=\S)', pop=True),
     ]
 
 def end(keyword=None):
@@ -72,11 +72,11 @@ def end(keyword=None):
     else:
         next_context = expect_identifier('variable.other.label.sql')
 
-    return {
-        'match': word('END'),
-        'scope': 'keyword.control.sql',
-        'set': next_context,
-    }
+    return rule(
+        match=word('END'),
+        scope='keyword.control.sql',
+        set=next_context,
+    )
 
 def word(match):
     return r'(?i)\b(?:%s)\b' % match
@@ -85,42 +85,40 @@ def word_ahead(match):
     return r'(?i)\b(?=(?:%s)\b)' % match
 
 def empty_context(*args):
-    return [ { 'match':'', 'pop': True } ]
+    return [ rule(match='', pop=True) ]
 
 def all(*contexts):
     return [
-        { 'include': context } for context in contexts
+        rule(include=context) for context in contexts
     ]
 
 def heredoc(start, end):
-    return {
-        'match': r"(?i)q\'%s" % start,
-        'scope': 'punctuation.definition.string.begin.sql',
-        'set': [
-            { 'meta_include_prototype': False },
-            { 'meta_scope': 'string.quoted.heredoc.sql' },
-            {
-                'match': r"%s\'" % end,
-                'scope': 'punctuation.definition.string.end.sql',
-                'pop': True,
-            },
+    return rule(
+        match=r"(?i)q\'%s" % start,
+        scope='punctuation.definition.string.begin.sql',
+        set=[
+            rule(meta_include_prototype=False),
+            rule(meta_scope='string.quoted.heredoc.sql'),
+            rule(
+                match=r"%s\'" % end,
+                scope='punctuation.definition.string.end.sql',
+                pop=True,
+            ),
         ],
-    }
+    )
 
 def list_of(context):
-    return [{
-        'match': r'',
-        'set': [
+    return [rule(
+        match=r'',
+        set=[
             [
-                {
-                    'match': ',',
-                    'scope': 'punctuation.separator.comma.sql',
-                    'push': context,
-                },
-                {
-                    'include': 'else-pop',
-                }
+                rule(
+                    match=',',
+                    scope='punctuation.separator.comma.sql',
+                    push=context,
+                ),
+                rule(include='else-pop')
             ],
             context,
         ]
-    }]
+    )]

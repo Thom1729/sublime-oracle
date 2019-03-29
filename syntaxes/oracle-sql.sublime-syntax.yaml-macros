@@ -574,28 +574,46 @@ contexts:
   function-name: !expect_identifier variable.function.sql
 
   analytic-clause-contents:
+    - meta_scope: meta.analytic-clause.sql
     - include: pop-on-terminator
 
     - match: !word PARTITION\s+BY
       scope: keyword.other.sql
-      set:
-        - include: analytic-clause-contents
+      push:
         - include: expression-list
 
     - match: !word ORDER\s+BY
       scope: keyword.order.sql
-      set:
-        - include: analytic-clause-contents
+      push:
         - include: order-by-list
 
     - match: !word ROWS|RANGE
       scope: keyword.other.sql
-      set:
-        - match: !word UNBOUNDED|PRECEDING|FOLLOWING|CURRENT\s+ROW
+      push:
+        - match: !word BETWEEN
           scope: keyword.other.sql
+          set:
+            - - match: !word AND
+                scope: keyword.other.sql
+                set: analytic-clause-window
+              - include: else-pop
+            - analytic-clause-window
+        - match: (?=\S)
+          set: analytic-clause-window
 
-        - include: analytic-clause-contents
-        - include: expression-list
+  analytic-clause-window:
+    - match: !word UNBOUNDED
+      scope: keyword.other.sql
+      set: !expect_keyword PRECEDING
+
+    - match: !word CURRENT
+      scope: keyword.other.sql
+      set: !expect_keyword ROW
+
+    - match: (?=\S)
+      set:
+        - !expect_keyword PRECEDING|FOLLOWING
+        - expression
 
   literals:
     - include: number
@@ -670,13 +688,17 @@ contexts:
     - match: ','
       scope: punctuation.separator.comma.sql
 
-  order-by-list:
-    - include: pop-on-terminator
+  order-by-list: !stack [ order-by-tail, order-by-item ]
 
-    - include: comma
+  order-by-tail:
+    - match: \,
+      scope: punctuation.separator.comma.sql
+      push: order-by-item
+    - include: else-pop
 
-    - match: (?=\S)
-      push: [ order-expression, expression ]
+  order-by-item: !stack
+    - order-expression
+    - expression
 
   order-expression:
     - match: !word ASC|DESC|NULLS|FIRST|LAST
@@ -725,7 +747,8 @@ contexts:
         - !meta meta.case.sql
         - case-body
         - - include: pop-on-when
-          - include: expression
+          - match: (?=\S)
+            set: expression
 
   case-body:
     - match: !word WHEN
