@@ -300,10 +300,10 @@ contexts:
               pop: true
         -   - include: query-block
             - include: select-list
-        -   - match: (?i)\b(?:DISTINCT)\b
+        -   - match: (?i)\b(?:DISTINCT|ALL|UNIQUE)\b
               scope: keyword.other.sql
               pop: true
-            - match: (?=\s*(?!(?i)\b(?:DISTINCT)\b)\S)
+            - match: (?=\s*(?!(?i)\b(?:DISTINCT|ALL|UNIQUE)\b)\S)
               pop: true
         - expect-hint
 
@@ -350,8 +350,8 @@ contexts:
             - clear_scopes: 1
             - match: ''
               pop: true
-        -   - include: query-block
-            - include: expression-list
+        # - !all [ query-block, expression-list ]
+        - query-group-by-contents
         -
 
             - match: (?i)\b(?:BY)\b
@@ -755,6 +755,56 @@ contexts:
             - include: else-pop
 
         - select-list
+  query-group-by-contents:
+    - match: (?=\S)
+      set:
+        - query-group-by-tail
+        - query-group-by-item
+  query-group-by-tail:
+    - match: ','
+      scope: punctuation.separator.comma.js
+      push: query-group-by-item
+    - include: else-pop
+
+  query-group-by-item:
+    - match: (?i)\b(?:ROLLUP|CUBE)\b
+      scope: keyword.other.sql
+      set:
+        - match: \(
+          scope: punctuation.section.group.begin.sql
+          set:
+            -   - match: \)
+                  scope: punctuation.section.group.end.sql
+                  pop: true
+                - match: (?=\s*(?!\))\S)
+                  pop: true
+            - expression-list
+        - match: (?=\S)
+          pop: true
+    - match: (?i)\b(?:GROUPING)\b
+      scope: keyword.other.sql
+      set:
+        -   - match: \(
+              scope: punctuation.section.group.begin.sql
+              set:
+                -   - match: \)
+                      scope: punctuation.section.group.end.sql
+                      pop: true
+                    - match: (?=\s*(?!\))\S)
+                      pop: true
+                - query-group-by-contents
+            - match: (?=\S)
+              pop: true
+        -   - match: (?i)\b(?:SETS)\b
+              scope: keyword.other.sql
+              pop: true
+            - match: (?=\s*(?!(?i)\b(?:SETS)\b)\S)
+              pop: true
+    - match: (?=\S)
+      set: expression
+
+# Expressions ##################################################################
+
   expression-list:
     - match: (?=\S)
       set:

@@ -220,7 +220,7 @@ contexts:
       push:
         - !meta_set meta.query.select.sql
         - !all [ query-block, select-list ]
-        - !expect_keyword DISTINCT
+        - !expect_keyword DISTINCT|ALL|UNIQUE
         - expect-hint
 
     - match: !word FROM|(NATURAL\s+)?((LEFT|RIGHT|FULL)\s+)?((OUTER|INNER|CROSS)\s+)?JOIN
@@ -251,7 +251,8 @@ contexts:
       scope: keyword.other.sql
       push:
         - !meta_set meta.query.group_by.sql
-        - !all [ query-block, expression-list ]
+        # - !all [ query-block, expression-list ]
+        - query-group-by-contents
         - !expect_keyword BY
 
     - match: !word HAVING
@@ -411,6 +412,28 @@ contexts:
       - include: else-pop
 
     - select-list
+
+  query-group-by-contents: !stack
+    - query-group-by-tail
+    - query-group-by-item
+
+  query-group-by-tail:
+    - match: ','
+      scope: punctuation.separator.comma.js 
+      push: query-group-by-item
+    - include: else-pop
+
+  query-group-by-item:
+    - match: !word ROLLUP|CUBE
+      scope: keyword.other.sql
+      set: !expect_in_parens expression-list
+    - match: !word GROUPING
+      scope: keyword.other.sql
+      set:
+        - !expect_in_parens query-group-by-contents
+        - !expect_keyword SETS
+    - match: (?=\S)
+      set: expression
 
 # Expressions ##################################################################
 
